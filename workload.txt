@@ -1,0 +1,6 @@
+/usr/bin/echo Hello World!
+echo whatever
+echo sloobidy doobidy, date goes first, hello world last
+ls -a
+date
+

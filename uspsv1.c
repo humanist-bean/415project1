@@ -19,9 +19,9 @@ int main( UNUSED int argc, char *argv[]){
 	int fd;
 	char *args[BUFSIZ];
 	char buf[BUFSIZ];
-	char *string;
+	char command[BUFSIZ];
 	int status;
-	int index;
+	int waits = 0;
 
 	if(argv[1] == NULL){
 		printf("ERROR: You must provide a file name \n");
@@ -37,36 +37,37 @@ int main( UNUSED int argc, char *argv[]){
 		return EXIT_FAILURE;
 	}
 	
-	int i = 0;
-	while(p1getline(fd, buf, sizeof buf) != 0){
-		buf[p1strlen(buf)] = "\0";
-		index = p1getword(buf, sizeof buf, string);
-		if(index == -1){
-			printf(" p1getword returned -1, we are at end of buf i think\n");
+	// prepare args[] by loading it with commands and
+	// their respective arguments
+	while(p1getline(fd, buf, sizeof buf) != 0){		
+		++waits;
+		int i = 0;
+		buf[p1strlen(buf)-1] = '\0';
+		//printf("%s\n", buf);
+		int index = 0;
+		while((index = p1getword(buf, index, command)) != -1){
+			args[i] = p1strdup(command); 
+		//	printf("%s\n", args[i]);
+			i++;
 		}
-		args[i] = p1strdup(string); // duplicate command name into args
-		i++;
-		args[i] = p1strdup((&buf[index])); // duplicate command arguments into args
-		i++;
-	}
-	args[i] = NULL; // sentinel so we know when out of args
+		args[i] = NULL; // sentinel so we know when out of args
 
-	// fork, execute, and join
-	i = 0;
-	int pid[100];
-	while(args[2*i + 1] != NULL){
-		pid[i] = fork();
-		if(pid[i] == 0){
-			//test
-			printf("args: %s, %s \n", args[2*i], args[2*i + 1]);
-			//end test
-			execvp(args[2*i], args[2*i + 1]);
+		// fork, execute, and join
+		pid_t pid = fork();
+		if(pid == 0){
+		/*	if(execvp(args[0], args) == -1){
+				printf("\nThere was an error in the execvp call for i = : %d, arg[i] = %s \n", i, args[i]);
+			}*/
+			printf("args[0]: %s\n", args[0]);	
+			execvp(args[0], args);
 		}
-		i++;
 	}
-	for(int j = 0; j < i; j++){
-		wait(pid[i]);
+	while(waits > 0){
+		wait(NULL);
+		printf("waits: %d\n", waits);
+		--waits;
 	}
-
+	// close file and return
+	close(fd);
 	return EXIT_SUCCESS;
 }

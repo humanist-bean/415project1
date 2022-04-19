@@ -56,18 +56,12 @@ int main( UNUSED int argc, char *argv[]){
 			//p1putstr("args[0]: %s\n", args[0]);	
 			execvp(args[0], args);
 		}
-		// noticed memory leaks caused by strdup, so i free here
-		for(int j = 0; j < i; j++){
-			printf("Bouta free \n");
-			free(args[j]);
-		}
 	}
 	while(waits > 0){
 		wait(NULL);
 		--waits;
 	}
-	// close file, free fileName, and return
-	free(fileName);
+	// close file and return
 	close(fd);
 	return EXIT_SUCCESS;
 }

@@ -58,7 +58,6 @@ int main( UNUSED int argc, char *argv[]){
 		}
 		// noticed memory leaks caused by strdup, so i free here
 		for(int j = 0; j < i; j++){
-			printf("Bouta free \n");
 			free(args[j]);
 		}
 	}

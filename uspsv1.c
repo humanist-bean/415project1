@@ -49,12 +49,13 @@ int main( UNUSED int argc, char *argv[]){
 			i++;
 		}
 		args[i] = NULL; // sentinel so we know when out of args
-
+		
 		// fork, execute, and join
 		pid_t pid = fork();
 		if(pid == 0){
 			//p1putstr("args[0]: %s\n", args[0]);	
 			execvp(args[0], args);
+			//printf("Made it!\n"); // remove me, just testing if code after exexvp ever runs
 		}
 		// noticed memory leaks caused by strdup, so i free here
 		for(int j = 0; j < i; j++){

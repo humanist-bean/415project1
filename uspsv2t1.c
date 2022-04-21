@@ -3,42 +3,33 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
-#include <signal.h>
 #include "p1fxns.h"
-
+#include <signal.h>
 
 #define USESTR "usage: [WORKLOAD_FILE] ... \n"
 #define UNUSED __attribute__((unused))
 
 // GLOBAL VARIABLES
-int signalled = 0;
+char *args[BUFSIZ]; // so we can call execvp from within the signal_handler 
 
 void signal_handler(int sig){
-	//p1putstr(1, "MADE IT! inside signal handler\n");
-	//execvp(args[0], args);
-	signalled++;
+	p1putstr(1, "Called signal handler function from child proccess\n");
 }
+	
 
 int main( UNUSED int argc, char *argv[]){
 	// start by getting processing argv to find workload file
 	// if no workload file is given, process standard input
 	const char *fileName;
 	int fd;
+	//char *args[BUFSIZ];
 	char buf[BUFSIZ];
 	char command[BUFSIZ];
-	char *args[BUFSIZ];
 	int status;
 	int waits = 0;
+	char *args[BUFSIZ];
 	pid_t pid;
 	pid_t pids[100];
-	sigset_t signalset;
-	int sig;
-
-	// initialize and add SIGUSR1 to signalset
-	status = sigemptyset(&signalset);
-	if(sigaddset(&signalset, SIGUSR1) == -1){
-		p1putstr(1, "ERROR - failed to add signal to signal set\n");
-	} 
 
 	if(argv[1] == NULL){
 		p1putstr(1, "ERROR: You must provide a file name \n");
@@ -69,20 +60,31 @@ int main( UNUSED int argc, char *argv[]){
 
 		// fork, execute, and join
 		pid = fork();
-		if(pid == 0){
-			//p1putstr("args[0]: %s\n", args[0]);	
-			//p1putstr(1, "About to register signal from child\n");
-			signal(SIGUSR1, signal_handler);
-			//sigsuspend(&signalset);
-			sigwait(&signalset, &sig);
-			//p1putstr(1, "Done waiting, about to call execvp\n");
+		if(pid < 0){
+			p1putstr(1, "ERROR: pid < 0 after fork(), so fork error...\n");
+			return EXIT_FAILURE;
+		}//child process
+		else if(pid == 0){
+			//p1putstr("args[0]: %s\n", args[0]);
+			p1putstr(1, "Test\n");
+			signal(SIGUSR1, signal_handler); // signal handler should now be called 
+			// in child process upon receiving SIGUSR1 from parent process
+			while(signalled < 1){
+				// do nothing here, so we are just waiting for
+				// signalled to be incremented
+			}
 			execvp(args[0], args);
-		} else if(pid > 0){
-			//p1putstr(1, "saving pid to pids in parent\n");
+			--signalled;
+		}
+		// Parent Process
+		else {
+			/*start by signalling child process
+			while(ready < waits){
+				sleep(1);
+			}*/
+			p1putstr(1, "In parent process, collecting pids for later\n");
 			pids[waits-1] = pid;
-			//sleep(1);
-		} else{
-			p1putstr(1, "FORK FAILED!\n");
+			//kill(pid, SIGUSR1);
 		}
 		// noticed memory leaks caused by strdup, so i free here
 		for(int j = 0; j < i; j++){
@@ -90,27 +92,15 @@ int main( UNUSED int argc, char *argv[]){
 		}
 	}
 	
-	int lines = waits;
-	if(pid > 0){
-		// do we have to manually wait for children to register?
-		// seems silly but I don't know any other way to do it yet...
-		sleep(1);
-		// send SIGUSR1 to each child
-		for(int k = 0; k < lines; k++){
-		       kill(pids[k], SIGUSR1);
+	if(pid > 0){ // we don't want child processes in here after above
+		for(int k = 0; k < waits; k++){
+			p1putstr(1, "Calling kill signal...\n");
+			kill(pids[k], SIGUSR1);
 		}
-		//send SIGSTOP to each child
-		for(int k = 0; k < lines; k++){
-		       kill(pids[k], SIGSTOP);
-		}
-		//send SIGCONT to each child
-		for(int k = 0; k < lines; k++){
-		       kill(pids[k], SIGCONT);
-		       //p1putstr(1, "CONT SIGNAL SENT FROM PARENT!");
-		}
-    				
-	}	
-
+	}
+	
+	
+	// wait for children to finish
 	while(waits > 0){
 		wait(NULL);
 		--waits;

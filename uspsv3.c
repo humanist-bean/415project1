@@ -6,6 +6,7 @@
 #include <sys/time.h>
 #include <signal.h>
 #include "p1fxns.h"
+#include "ADTs/queue.h"
 
 
 #define USESTR "usage: [WORKLOAD_FILE] ... \n"
@@ -13,36 +14,62 @@
 
 // GLOBAL VARIABLES
 int signalled = 0;
-int active_processes;
 // Need to use queue or array of pids (as circular buffer using %)
 // to keep track of active processes
 //pid_t paused_processes;
 //pid_t continued_processes;
+int active_processes;
+int time_to_switch = 0;
 
-void signal_handler(int sig){
+// QUEUE FOR KEEPING TRACK OF PROCESSES
+void freeValue(){
+	// free() here? or maybe just do nothing...
+	return;
+}
+
+const Queue * myQueue = NULL;
+/*myQueue = Queue_create(freeValue);
+if(myQueue == NULL){
+	p1perror("Failed to create queue...\n");
+	free((void *)myQueue);
+	return EXIT_FAILURE;
+} */
+
+// STRUCTURE FOR KEEPING TRACK OF PROCESSES
+struct Process{
+	pid_t myPid;
+	int started;
+	int running;
+};
+struct Process *lastProcess;
+
+// SIGNAL HANDLERS
+void signal_handler(UNUSED int sig){
 	//p1putstr(1, "MADE IT! inside signal handler\n");
 	//execvp(args[0], args);
 	signalled++;
 }
 
 /* SIGCHLD Handler from SYSC 1.4.6 */
-void child_signaled(int sig){ // this is called every time a child makes a signal, which occurs
+void child_signaled(UNUSED int sig){ // this is called every time a child makes a signal, which occurs
 	// every time a major event occurs in the child proccess
 	pid_t pid;
 	int status;
 
 	while((pid = waitpid(-1, &status, WNOHANG)) > 0){
-		if(WIFEXITED(status) || WIFSIGNALED(status)){ // I think we just use WIFEXITED here?
+		if(WIFEXITED(status)){ // I think we just use WIFEXITED here?
 			// might also want to do if checks for all the different signals to determine
 			// how we manage our queues/array
 			// E.G.: WIFCONTINUED, WIFSTOPPED, etc...
-			--active_processes;
-		}
+			lastProcess->running = 0; // prevents lastProcess from being enqueued again
+		} // else do nothing? note child_signaled is called for every tim SIGCHLD is sent,
+		// which for all I know could be every time the child is continued, stopped, etc...
+		// or just when it finishes...
 	}
 }
 
-void timer_signaled(int sig){ // this should be called upon every SIGALARM from settimer
-	asdf;//pick up here, don't forget to register SIGALARM in main !
+void timer_signaled(UNUSED int sig){ // this should be called upon every SIGALARM from settimer
+	time_to_switch = 1;
 }
 
 int main( UNUSED int argc, char *argv[]){
@@ -56,7 +83,7 @@ int main( UNUSED int argc, char *argv[]){
 	int status;
 	int waits = 0;
 	pid_t pid;
-	pid_t pids[100];
+	//pid_t pids[100];
 	sigset_t signalset;
 	int sig;
 
@@ -81,7 +108,7 @@ int main( UNUSED int argc, char *argv[]){
 	}
 	
 	// prepare args[] by loading it with commands and
-	// their respective arguments
+	// their respective arguments AND FORK!
 	while(p1getline(fd, buf, sizeof buf) != 0){		
 		++waits;
 		int i = 0;
@@ -105,7 +132,13 @@ int main( UNUSED int argc, char *argv[]){
 			execvp(args[0], args);
 		} else if(pid > 0){
 			//p1putstr(1, "saving pid to pids in parent\n");
-			pids[waits-1] = pid;
+			struct Process childProcess;
+			childProcess.myPid = pid;
+			childProcess.running = 0;
+			childProcess.started = 0;
+			struct Process *ptr = &childProcess;
+			myQueue->enqueue(myQueue, &ptr);
+			//pids[waits-1] = pid;
 			//sleep(1);
 		} else{
 			p1putstr(1, "FORK FAILED!\n");
@@ -117,11 +150,9 @@ int main( UNUSED int argc, char *argv[]){
 	}
 	
 	// NEW CHILD PROCESS CONTROL SEQUENCE WITH SETITIMER
-	int lines = waits;
 	if(pid > 0){
 		sleep(1); //wait for child processes to register their signals
 		
-		active_processes = lines; // set Global here for use in child_alarmed()
 
 		// set parent's SIGCHLD to child_signaled
 		// so its called upon each signal from child to parent,
@@ -129,6 +160,12 @@ int main( UNUSED int argc, char *argv[]){
 		// 1. Completes (WIFEXITED) 2. Is paused (WIFSTOPPED) 3. Is continued (WIFCONTINUED)
 		if(signal(SIGCHLD, child_signaled) == SIG_ERR){
 			p1perror(1, "ERROR - unable to register SIGCHLD in parent\n");
+			return EXIT_FAILURE;
+		}
+
+		//
+		if(signal(SIGALRM, timer_signaled) == SIG_ERR){
+			p1perror(1, "ERROR - unable to register SIGALRM in parent\n");
 			return EXIT_FAILURE;
 		}
 
@@ -142,42 +179,51 @@ int main( UNUSED int argc, char *argv[]){
 		
 		// use setitimer to send signal alarm every BLANK milliseconds
 		if(setitimer(ITIMER_REAL, &it_val, NULL) == -1){
-			p1perr(1, "ERROR - setitimer() failed.\n");
+			p1perror(1, "ERROR - setitimer() failed.\n");
 			return EXIT_FAILURE;
 		} // now SIGALARM should be sent by setitimer every interval in &it_val
-	}
-	// END NEW CHILD PROCESS CONTROL SEQUENCE
-	
-	// original child process control sequence from uspsv2
-	int lines = waits;
-	if(pid > 0){
-		// do we have to manually wait for children to register?
-		// seems silly but I don't know any other way to do it yet...
-		sleep(1);	
-		// send SIGUSR1 to each child
-		for(int k = 0; k < lines; k++){
-		       kill(pids[k], SIGUSR1);
-		}
-		//send SIGSTOP to each child
-		for(int k = 0; k < lines; k++){
-		       kill(pids[k], SIGSTOP);
-		}
-		//send SIGCONT to each child
-		for(int k = 0; k < lines; k++){
-		       kill(pids[k], SIGCONT);
-		       //p1putstr(1, "CONT SIGNAL SENT FROM PARENT!");
-		}
-    				
-	}	
+		
+		// START CHILD MANAGEMENT LOOP
+		struct Process *place_holder_for_loop;
+		struct Process get_started;
+		get_started.started = 0;
+		get_started.running = 0;
+		lastProcess = &get_started;
+		while(myQueue->front(myQueue, &place_holder_for_loop)){ //runs till queue is empty
+			if(time_to_switch){
+				time_to_switch = 0;
 
-	while(waits > 0){
-		wait(NULL);
-		--waits;
+				struct Process *currentProcess;
+		      		myQueue->dequeue(myQueue, &currentProcess);
+
+				if(lastProcess->running){
+					kill(lastProcess->myPid, SIGSTOP);
+					lastProcess->running = 0;
+					myQueue->enqueue(myQueue, &lastProcess);
+				}
+
+				if(!(currentProcess->started)){
+					kill(currentProcess->myPid, SIGUSR1); //starts process for the first time
+					currentProcess->started = 1;
+					currentProcess->running = 1;
+					lastProcess = currentProcess;		
+				}
+				else if(!(currentProcess->running)){
+					kill(currentProcess->myPid, SIGCONT);
+					currentProcess->running = 1;
+					lastProcess = currentProcess;
+				}
+					
+					
+			}
+			pause(); // THIS COULD CAUSE PROBLEMS...
+		}
 	}
-	// END ORIGINAL CHILD PROCESS CONTROL SEQUENCE
+	// END NEW CHILD PROCESS CONTROL SEQUENCE	
 	
 	// close file, free fileName, and return
 	free(fileName);
 	close(fd);
+	myQueue->destroy(myQueue);
 	return EXIT_SUCCESS;
 }

@@ -27,19 +27,14 @@ void freeValue(){
 	return;
 }
 
-const Queue * myQueue = NULL;
-/*myQueue = Queue_create(freeValue);
-if(myQueue == NULL){
-	p1perror("Failed to create queue...\n");
-	free((void *)myQueue);
-	return EXIT_FAILURE;
-} */
+const Queue *myQueue = NULL;
 
 // STRUCTURE FOR KEEPING TRACK OF PROCESSES
 struct Process{
 	pid_t myPid;
 	int started;
 	int running;
+	int done;
 };
 struct Process *lastProcess;
 
@@ -56,12 +51,15 @@ void child_signaled(UNUSED int sig){ // this is called every time a child makes 
 	pid_t pid;
 	int status;
 
+	p1putstr(1, "About to enter while loop in child_signalled\n");
 	while((pid = waitpid(-1, &status, WNOHANG)) > 0){
 		if(WIFEXITED(status)){ // I think we just use WIFEXITED here?
 			// might also want to do if checks for all the different signals to determine
 			// how we manage our queues/array
 			// E.G.: WIFCONTINUED, WIFSTOPPED, etc...
+			printf("setting lastProcess->running = 0 within child_signaled\n");
 			lastProcess->running = 0; // prevents lastProcess from being enqueued again
+			lastProcess->done = 1; // THIS CHANGE ISN'T DOING ANYTHING!
 		} // else do nothing? note child_signaled is called for every tim SIGCHLD is sent,
 		// which for all I know could be every time the child is continued, stopped, etc...
 		// or just when it finishes...
@@ -69,6 +67,7 @@ void child_signaled(UNUSED int sig){ // this is called every time a child makes 
 }
 
 void timer_signaled(UNUSED int sig){ // this should be called upon every SIGALARM from settimer
+	p1putstr(1, "About to set time_to_switch = 1 in timer signaled()\n");
 	time_to_switch = 1;
 }
 
@@ -83,9 +82,15 @@ int main( UNUSED int argc, char *argv[]){
 	int status;
 	int waits = 0;
 	pid_t pid;
-	//pid_t pids[100];
+	pid_t pids[100];
 	sigset_t signalset;
 	int sig;
+
+	// Initialize Queue
+	if ((myQueue = Queue_create(NULL)) == NULL){
+		p1perror(1, "ERROR - failed to create stack ADT Queue\n");
+		return EXIT_FAILURE;
+	}
 
 	// initialize and add SIGUSR1 to signalset
 	status = sigemptyset(&signalset);
@@ -131,15 +136,7 @@ int main( UNUSED int argc, char *argv[]){
 			//p1putstr(1, "Done waiting, about to call execvp\n");
 			execvp(args[0], args);
 		} else if(pid > 0){
-			//p1putstr(1, "saving pid to pids in parent\n");
-			struct Process childProcess;
-			childProcess.myPid = pid;
-			childProcess.running = 0;
-			childProcess.started = 0;
-			struct Process *ptr = &childProcess;
-			myQueue->enqueue(myQueue, &ptr);
-			//pids[waits-1] = pid;
-			//sleep(1);
+			pids[waits-1] = pid;
 		} else{
 			p1putstr(1, "FORK FAILED!\n");
 		}
@@ -148,6 +145,19 @@ int main( UNUSED int argc, char *argv[]){
 			free(args[j]);
 		}
 	}
+
+	// LOAD QUEUE
+	struct Process childProcess[waits];
+	for(int j = 0; j < waits; j++){
+		//p1putstr(1, "saving pid to pids in parent\n");
+		childProcess[j].myPid = pids[j];
+		childProcess[j].running = 0;
+		childProcess[j].started = 0;
+		childProcess[j].done = 0;
+		//printf("About to enqueue chile process in fork() loop, pid: %d\n", childProcess.myPid);
+		(void)myQueue->enqueue(myQueue, (void *)&childProcess[j]); //&childProcess
+	}
+
 	
 	// NEW CHILD PROCESS CONTROL SEQUENCE WITH SETITIMER
 	if(pid > 0){
@@ -172,7 +182,7 @@ int main( UNUSED int argc, char *argv[]){
 		//initialize it_val with INTERVAL, eventually this should be given by
 		// QUANTUM in either args or a environment variable
 		struct itimerval it_val;
-		it_val.it_value.tv_sec = 0; // not sure exactly how to set tv_sec and tv_usec
+		it_val.it_value.tv_sec = 1; // not sure exactly how to set tv_sec and tv_usec
 		it_val.it_value.tv_usec = 10000; // maybe they should match? IDK...
 		it_val.it_interval = it_val.it_value;
 		
@@ -183,40 +193,58 @@ int main( UNUSED int argc, char *argv[]){
 			return EXIT_FAILURE;
 		} // now SIGALARM should be sent by setitimer every interval in &it_val
 		
-		// START CHILD MANAGEMENT LOOP
+		// START CHILD MANAGEMENT LOOP 
 		struct Process *place_holder_for_loop;
 		struct Process get_started;
 		get_started.started = 0;
 		get_started.running = 0;
+		get_started.done = 0;
 		lastProcess = &get_started;
-		while(myQueue->front(myQueue, &place_holder_for_loop)){ //runs till queue is empty
-			if(time_to_switch){
-				time_to_switch = 0;
 
+		// TESTING BELOW
+		int queue_size = myQueue->size(myQueue);
+		printf("QUEUE TEST, QUEUE SIZE: %d \n", queue_size);
+		// iterate through and print contents of queue!
+		const Iterator *iq = myQueue->itCreate(myQueue);
+		while (iq->hasNext(iq)){
+			iq->next(iq, (void**)&place_holder_for_loop);
+			printf("ELEMENT PID: %d\n", place_holder_for_loop->myPid);
+		}
+			
+
+		while(myQueue->front(myQueue, &place_holder_for_loop)){ //runs till queue is empty
+		//	p1putstr(1, "IN CHILD CONTROL WHILE LOOP\n");
+			if(time_to_switch){
+
+				//p1putstr(1, "IN CHILD CONTROL IF BLOCK\n");
 				struct Process *currentProcess;
 		      		myQueue->dequeue(myQueue, &currentProcess);
+			
+				printf("currentProcess - myPid: %d, started %d, running %d, done %d\n", currentProcess->myPid, currentProcess->started, currentProcess->running, currentProcess->done);
 
-				if(lastProcess->running){
+				printf("lastProcess - myPid: %d, started %d, running %d, done %d\n", lastProcess->myPid, lastProcess->started, lastProcess->running, lastProcess->done);
+				if(lastProcess->running && !(lastProcess->done)){
 					kill(lastProcess->myPid, SIGSTOP);
-					lastProcess->running = 0;
-					myQueue->enqueue(myQueue, &lastProcess);
+					lastProcess->running = 0; // this creates an infinite loop!
+					// PICK UP HERE!!!
+					printf("Enqueuing process after stopping it\n");
+					myQueue->enqueue(myQueue, lastProcess);
 				}
 
 				if(!(currentProcess->started)){
+					lastProcess = currentProcess;		
 					kill(currentProcess->myPid, SIGUSR1); //starts process for the first time
 					currentProcess->started = 1;
 					currentProcess->running = 1;
-					lastProcess = currentProcess;		
 				}
 				else if(!(currentProcess->running)){
+					lastProcess = currentProcess;		
 					kill(currentProcess->myPid, SIGCONT);
 					currentProcess->running = 1;
-					lastProcess = currentProcess;
 				}
-					
-					
+				time_to_switch = 0;
 			}
-			pause(); // THIS COULD CAUSE PROBLEMS...
+			//pause(); // THIS COULD CAUSE PROBLEMS...
 		}
 	}
 	// END NEW CHILD PROCESS CONTROL SEQUENCE	

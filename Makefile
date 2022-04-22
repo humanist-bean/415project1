@@ -1,4 +1,4 @@
-CFLAGS=-W -Wall -I/usr/local/include
+CFLAGS=-g -W -Wall -I/usr/local/include
 LDFLAGS=-L/usr/local/lib
 PROGS=uspsv1 uspsv2 uspsv3
 LIBRARIES=-lADTs

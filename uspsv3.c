@@ -20,6 +20,8 @@ int signalled = 0;
 //pid_t continued_processes;
 int active_processes;
 int time_to_switch = 0;
+// child manager while loop runs till waits = 0;
+int waits = 0;
 
 // QUEUE FOR KEEPING TRACK OF PROCESSES
 void freeValue(){
@@ -57,7 +59,8 @@ void child_signaled(UNUSED int sig){ // this is called every time a child makes 
 			// how we manage our queues/array
 			// E.G.: WIFCONTINUED, WIFSTOPPED, etc...
 			lastProcess->running = 0; // prevents lastProcess from being enqueued again
-			lastProcess->done = 1; // THIS CHANGE ISN'T DOING ANYTHING!
+			lastProcess->done = 1;
+			--waits;
 		} // else do nothing? note child_signaled is called for every tim SIGCHLD is sent,
 		// which for all I know could be every time the child is continued, stopped, etc...
 		// or just when it finishes...
@@ -77,14 +80,14 @@ int main( UNUSED int argc, char *argv[]){
 	char command[BUFSIZ];
 	char *args[BUFSIZ];
 	int status;
-	int waits = 0;
+	//int waits = 0;
 	pid_t pid;
 	pid_t pids[100];
 	sigset_t signalset;
 	int sig;
 
 	// Initialize Queue
-	if ((myQueue = Queue_create(NULL)) == NULL){
+	if ((myQueue = Queue_create(freeValue)) == NULL){
 		p1perror(1, "ERROR - failed to create stack ADT Queue\n");
 		return EXIT_FAILURE;
 	}
@@ -195,7 +198,7 @@ int main( UNUSED int argc, char *argv[]){
 		
 			
 
-		while(myQueue->front(myQueue, &place_holder_for_loop)){ //runs till queue is empty
+		while(waits){ //runs till queue is empty
 			if(time_to_switch){
 				struct Process *currentProcess;
 		      		myQueue->dequeue(myQueue, &currentProcess);

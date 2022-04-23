@@ -51,13 +51,11 @@ void child_signaled(UNUSED int sig){ // this is called every time a child makes 
 	pid_t pid;
 	int status;
 
-	p1putstr(1, "About to enter while loop in child_signalled\n");
 	while((pid = waitpid(-1, &status, WNOHANG)) > 0){
 		if(WIFEXITED(status)){ // I think we just use WIFEXITED here?
 			// might also want to do if checks for all the different signals to determine
 			// how we manage our queues/array
 			// E.G.: WIFCONTINUED, WIFSTOPPED, etc...
-			printf("setting lastProcess->running = 0 within child_signaled\n");
 			lastProcess->running = 0; // prevents lastProcess from being enqueued again
 			lastProcess->done = 1; // THIS CHANGE ISN'T DOING ANYTHING!
 		} // else do nothing? note child_signaled is called for every tim SIGCHLD is sent,
@@ -67,7 +65,6 @@ void child_signaled(UNUSED int sig){ // this is called every time a child makes 
 }
 
 void timer_signaled(UNUSED int sig){ // this should be called upon every SIGALARM from settimer
-	p1putstr(1, "About to set time_to_switch = 1 in timer signaled()\n");
 	time_to_switch = 1;
 }
 
@@ -128,12 +125,8 @@ int main( UNUSED int argc, char *argv[]){
 		// fork, execute, and join
 		pid = fork();
 		if(pid == 0){
-			//p1putstr("args[0]: %s\n", args[0]);	
-			//p1putstr(1, "About to register signal from child\n");
 			signal(SIGUSR1, signal_handler);
-			//sigsuspend(&signalset);
 			sigwait(&signalset, &sig);
-			//p1putstr(1, "Done waiting, about to call execvp\n");
 			execvp(args[0], args);
 		} else if(pid > 0){
 			pids[waits-1] = pid;
@@ -149,12 +142,10 @@ int main( UNUSED int argc, char *argv[]){
 	// LOAD QUEUE
 	struct Process childProcess[waits];
 	for(int j = 0; j < waits; j++){
-		//p1putstr(1, "saving pid to pids in parent\n");
 		childProcess[j].myPid = pids[j];
 		childProcess[j].running = 0;
 		childProcess[j].started = 0;
 		childProcess[j].done = 0;
-		//printf("About to enqueue chile process in fork() loop, pid: %d\n", childProcess.myPid);
 		(void)myQueue->enqueue(myQueue, (void *)&childProcess[j]); //&childProcess
 	}
 
@@ -182,8 +173,8 @@ int main( UNUSED int argc, char *argv[]){
 		//initialize it_val with INTERVAL, eventually this should be given by
 		// QUANTUM in either args or a environment variable
 		struct itimerval it_val;
-		it_val.it_value.tv_sec = 1; // not sure exactly how to set tv_sec and tv_usec
-		it_val.it_value.tv_usec = 10000; // maybe they should match? IDK...
+		it_val.it_value.tv_sec = 0; // was 1 when working // not sure exactly how to set tv_sec and tv_usec
+		it_val.it_value.tv_usec = 250; // maybe they should match? IDK...
 		it_val.it_interval = it_val.it_value;
 		
 		
@@ -201,50 +192,37 @@ int main( UNUSED int argc, char *argv[]){
 		get_started.done = 0;
 		lastProcess = &get_started;
 
-		// TESTING BELOW
-		int queue_size = myQueue->size(myQueue);
-		printf("QUEUE TEST, QUEUE SIZE: %d \n", queue_size);
-		// iterate through and print contents of queue!
-		const Iterator *iq = myQueue->itCreate(myQueue);
-		while (iq->hasNext(iq)){
-			iq->next(iq, (void**)&place_holder_for_loop);
-			printf("ELEMENT PID: %d\n", place_holder_for_loop->myPid);
-		}
+		
 			
 
 		while(myQueue->front(myQueue, &place_holder_for_loop)){ //runs till queue is empty
-		//	p1putstr(1, "IN CHILD CONTROL WHILE LOOP\n");
 			if(time_to_switch){
-
-				//p1putstr(1, "IN CHILD CONTROL IF BLOCK\n");
 				struct Process *currentProcess;
 		      		myQueue->dequeue(myQueue, &currentProcess);
 			
-				printf("currentProcess - myPid: %d, started %d, running %d, done %d\n", currentProcess->myPid, currentProcess->started, currentProcess->running, currentProcess->done);
 
-				printf("lastProcess - myPid: %d, started %d, running %d, done %d\n", lastProcess->myPid, lastProcess->started, lastProcess->running, lastProcess->done);
 				if(lastProcess->running && !(lastProcess->done)){
+					//p1putstr(1, "1!\n");
 					kill(lastProcess->myPid, SIGSTOP);
-					lastProcess->running = 0; // this creates an infinite loop!
-					// PICK UP HERE!!!
-					printf("Enqueuing process after stopping it\n");
+					lastProcess->running = 0; 
 					myQueue->enqueue(myQueue, lastProcess);
 				}
 
 				if(!(currentProcess->started)){
+					//p1putstr(1, "2!\n");
 					lastProcess = currentProcess;		
 					kill(currentProcess->myPid, SIGUSR1); //starts process for the first time
 					currentProcess->started = 1;
 					currentProcess->running = 1;
 				}
 				else if(!(currentProcess->running)){
+					//p1putstr(1, "3!\n");
 					lastProcess = currentProcess;		
 					kill(currentProcess->myPid, SIGCONT);
 					currentProcess->running = 1;
 				}
 				time_to_switch = 0;
 			}
-			//pause(); // THIS COULD CAUSE PROBLEMS...
 		}
 	}
 	// END NEW CHILD PROCESS CONTROL SEQUENCE	

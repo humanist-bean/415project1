@@ -3,3 +3,6 @@ echo whatever
 echo sloobidy doobidy, date goes first hello world last
 ls -a
 date
+./cpubound -m 1
+./iobound -m 1
+echo done with weird bound thingies

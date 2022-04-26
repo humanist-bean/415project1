@@ -93,7 +93,6 @@ int main( int argc, char *argv[]){
 	int sig;
 	// variables for uspsv4 print proc info
 	char *procFileName;
-	//char procTemplate[50]; // = "/proc/\0"; // we want /proc/PID#/stat
 	char pidStr[25];
 	int procfd;
 	int lines;
@@ -228,6 +227,7 @@ int main( int argc, char *argv[]){
 		lastProcess = &get_started;
 
 		time_to_dump = lines = waits; // we want to run our first dump after starting each process
+		time_to_dump = 0; //TEST
 		while(waits){ //runs till queue is empty
 			if(time_to_switch){
 				struct Process *currentProcess;
@@ -266,23 +266,30 @@ int main( int argc, char *argv[]){
 					p1strcat(procTemplate, "/proc/");
 					p1strcat(procTemplate, pidStr);
 					p1strcat(procTemplate, "/stat");
+					procFileName = p1strdup(procTemplate);
 					//procTemplate is ready to use as way to open file
 					//now its time to open the file
+					printf("TEST: procTemplate = %s\n", procTemplate);
 					procfd = open(procTemplate, O_RDONLY);
 					if(procfd == -1){
 						p1putstr(1, "ERROR: Could not open file procfd in main\n");
-						return EXIT_FAILURE;
+						//return EXIT_FAILURE;
+						goto next_process;
+					} else{
+						printf("SUCCESSFULLY OPENED A PROC FILE\n");
 					}
 					//file is open, now we print contents in formatted manner
 					int test = 0;
-					while(p1getline(fd, buf, sizeof buf) != 0){	
+					while(p1getline(procfd, buf, sizeof buf) != 0){	
 						//print shit here
 						printf("Proc buf #%d: %s\n", test, buf);
 						++test;
 
 					}
-					p1strcpy(procTemplate, ""); //clear procTemplate for next process
 					close(procfd);
+					next_process:
+						p1strcpy(procTemplate, ""); //clear procTemplate for next process
+						free(procFileName);
 			
 				}
 				time_to_dump = 1000; // SET DUMP FREQUENCY HERE!

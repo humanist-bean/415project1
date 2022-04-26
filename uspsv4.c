@@ -259,9 +259,10 @@ int main( int argc, char *argv[]){
 			// uspsv4 print proc info, code here
 			//printf("TEST: time_do_dump = %d\n", time_to_dump);
 			if(time_to_dump < 1){
+				p1putstr(1, "---PROCESS INFO---\n");
 				for(int z = 0; z < lines; z++){
 					// open proc file by creating string for path
-					char procTemplate[50];
+					char procTemplate[50] = "";
 					p1itoa(pids[z], pidStr);
 					p1strcat(procTemplate, "/proc/");
 					p1strcat(procTemplate, pidStr);
@@ -269,23 +270,53 @@ int main( int argc, char *argv[]){
 					procFileName = p1strdup(procTemplate);
 					//procTemplate is ready to use as way to open file
 					//now its time to open the file
-					printf("TEST: procTemplate = %s\n", procTemplate);
+					//printf("TEST: procTemplate = %s\n", procTemplate);
 					procfd = open(procTemplate, O_RDONLY);
 					if(procfd == -1){
-						p1putstr(1, "ERROR: Could not open file procfd in main\n");
+						//p1putstr(1, "ERROR: Could not open file procfd in main\n");
 						//return EXIT_FAILURE;
 						goto next_process;
 					} else{
-						printf("SUCCESSFULLY OPENED A PROC FILE\n");
+						//printf("SUCCESSFULLY OPENED A PROC FILE\n");
 					}
 					//file is open, now we print contents in formatted manner
-					int test = 0;
-					while(p1getline(procfd, buf, sizeof buf) != 0){	
+					p1getline(procfd, buf, sizeof buf);
+					int word_tracker = 0;
+					int proc_index = 0;
+					p1putstr(1, "PROCESS #");
+					while((proc_index = p1getword(buf, proc_index, command)) != -1){
+						switch(word_tracker){
+							case 0:
+								p1putstr(1, command);
+								break;
+							case 1:
+								p1putstr(1, " ");
+								p1putstr(1, command);
+								break;
+							case 2: 
+								p1putstr(1, " - State: ");
+								p1putstr(1, command);
+								break;
+							case 3:
+								p1putstr(1, " - Parent PID: ");
+								p1putstr(1, command);
+								break;
+							case 22:
+								p1putstr(1, " - Virtual Memory: ");
+								p1putstr(1, command);
+								p1putstr(1, " bytes\n");
+								break;
+
+						}
+						++word_tracker;
+					}
+							
+					/*while(p1getline(procfd, buf, sizeof buf) != 0){	
 						//print shit here
 						printf("Proc buf #%d: %s\n", test, buf);
 						++test;
 
-					}
+					}*/
 					close(procfd);
 					next_process:
 						p1strcpy(procTemplate, ""); //clear procTemplate for next process

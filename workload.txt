@@ -5,4 +5,4 @@ ls -a
 date
 ./cpubound -m 1
 ./iobound -m 1
-echo done with weird bound thingies
+echo running bound programs

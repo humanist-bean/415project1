@@ -9,7 +9,7 @@
 #include "ADTs/queue.h"
 
 
-#define USESTR "usage: [WORKLOAD_FILE] ... \n"
+#define USESTR "usage: ./uspsv3 [-q <quantum in msec>] [WORKLOAD_FILE] ... \n"
 #define UNUSED __attribute__((unused))
 
 // GLOBAL VARIABLES
@@ -71,7 +71,7 @@ void timer_signaled(UNUSED int sig){ // this should be called upon every SIGALAR
 	time_to_switch = 1;
 }
 
-int main( UNUSED int argc, char *argv[]){
+int main( int argc, char *argv[]){
 	// start by getting processing argv to find workload file
 	// if no workload file is given, process standard input
 	const char *fileName;
@@ -80,12 +80,50 @@ int main( UNUSED int argc, char *argv[]){
 	char command[BUFSIZ];
 	char *args[BUFSIZ];
 	int status;
-	//int waits = 0;
+	//for environment variable Quantum
+	int quantum = -1;
+	char *quantum_string;
+	// variables to track pids and signals
 	pid_t pid;
 	pid_t pids[100];
 	sigset_t signalset;
 	int sig;
+	bool testBool; // delete me!
 
+	// BEGIN IMPROVED INPUT PROCESSING SECTION
+	// get command line arguments and environment variables
+	if((quantum_string = getenv("USPS_QUANTUM_MSEC")) != NULL){
+		quantum = atoi(quantum_string);
+	}
+	if(argc == 4 && (p1strneq(argv[1], "-q", 2))){
+		// case 1: quantum is given
+		quantum = p1atoi(argv[2]);
+		fileName = p1strdup(argv[3]);
+	} else if(argc == 2){
+		// case 2: just filename is given
+		fileName = p1strdup(argv[1]);
+	} else {
+		p1putstr(1, "ERROR - invalid command arguments\n");
+		p1putstr(1, USESTR);
+		return EXIT_FAILURE;
+	}
+	
+	fd = open(fileName, O_RDONLY);
+	if(fd == -1){
+		p1putstr(1, "ERROR: Could not open file fd in main\n");
+		return EXIT_FAILURE;
+	}
+
+	if(quantum < 1){
+		p1perror(1, "ERROR - quantum time must be > 0\n");
+		return EXIT_FAILURE;
+	}
+	if(quantum == NULL){
+		p1perror(1, "ERROR - Quantum value not specified in environment variable or command line\n");
+		return EXIT_FAILURE;
+	}
+	// END IMPROVED INPUT CAPTURE SECTION
+	
 	// Initialize Queue
 	if ((myQueue = Queue_create(freeValue)) == NULL){
 		p1perror(1, "ERROR - failed to create stack ADT Queue\n");
@@ -97,7 +135,8 @@ int main( UNUSED int argc, char *argv[]){
 	if(sigaddset(&signalset, SIGUSR1) == -1){
 		p1putstr(1, "ERROR - failed to add signal to signal set\n");
 	} 
-
+	
+/* start of old input processing
 	if(argv[1] == NULL){
 		p1putstr(1, "ERROR: You must provide a file name \n");
 		return EXIT_FAILURE;
@@ -111,6 +150,7 @@ int main( UNUSED int argc, char *argv[]){
 		p1putstr(1, "ERROR: Could not open file fd in main\n");
 		return EXIT_FAILURE;
 	}
+// end of old input processsing */
 	
 	// prepare args[] by loading it with commands and
 	// their respective arguments AND FORK!
@@ -177,7 +217,7 @@ int main( UNUSED int argc, char *argv[]){
 		// QUANTUM in either args or a environment variable
 		struct itimerval it_val;
 		it_val.it_value.tv_sec = 0; // was 1 when working // not sure exactly how to set tv_sec and tv_usec
-		it_val.it_value.tv_usec = 250; // maybe they should match? IDK...
+		it_val.it_value.tv_usec = quantum; // maybe they should match? IDK...
 		it_val.it_interval = it_val.it_value;
 		
 		

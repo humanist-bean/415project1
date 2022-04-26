@@ -5,7 +5,7 @@
 #include <sys/wait.h>
 #include "p1fxns.h"
 
-#define USESTR "usage: [WORKLOAD_FILE] ... \n"
+#define USESTR "usage: ./uspsv3 [-q <quantum in msec>] [WORKLOAD_FILE] ... \n"
 #define UNUSED __attribute__((unused))
 
 // use standard functions like fprint() to start off with,
@@ -22,20 +22,42 @@ int main( UNUSED int argc, char *argv[]){
 	char command[BUFSIZ];
 	int status;
 	int waits = 0;
-
-	if(argv[1] == NULL){
-		p1putstr(1, "ERROR: You must provide a file name \n");
-		return EXIT_FAILURE;
-	} else {
-		fileName = p1strdup(argv[1]);
+	
+	int quantum = -1;
+	char *quantum_string;
+	// BEGIN IMPROVED INPUT PROCESSING SECTION
+	// get command line arguments and environment variables
+	if((quantum_string = getenv("USPS_QUANTUM_MSEC")) != NULL){
+		quantum = atoi(quantum_string);
 	}
-
-	//open file and save words to array
+	if(argc == 4 && (p1strneq(argv[1], "-q", 2))){
+		// case 1: quantum is given
+		quantum = p1atoi(argv[2]);
+		fileName = p1strdup(argv[3]);
+	} else if(argc == 2){
+		// case 2: just filename is given
+		fileName = p1strdup(argv[1]);
+	} else {
+		p1putstr(1, "ERROR - invalid command arguments\n");
+		p1putstr(1, USESTR);
+		return EXIT_FAILURE;
+	}
+	
 	fd = open(fileName, O_RDONLY);
 	if(fd == -1){
 		p1putstr(1, "ERROR: Could not open file fd in main\n");
 		return EXIT_FAILURE;
 	}
+
+	if(quantum < 1){
+		p1perror(1, "ERROR - quantum time must be > 0\n");
+		return EXIT_FAILURE;
+	}
+	if(quantum == NULL){
+		p1perror(1, "ERROR - Quantum value not specified in environment variable or command line\n");
+		return EXIT_FAILURE;
+	}
+	// END IMPROVED INPUT CAPTURE SECTION
 	
 	// prepare args[] by loading it with commands and
 	// their respective arguments

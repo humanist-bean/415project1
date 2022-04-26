@@ -1,0 +1,9 @@
+Report of CIS 415 Project 1:
+by Alder French
+
+I think my solution meets the specifications. It produces no memory leaks.
+
+A couple things to note: 1. It only works if the workload file has no empty lines, i.e. each line has a command
+ 2. It compiles with warnings
+
+

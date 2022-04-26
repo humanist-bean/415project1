@@ -1,3 +1,10 @@
+/*
+Name: Alder French, DuckID: afrench7, Assignment: CIS 415 Project 1
+
+This is my own work, except for some help from Nick the TA, he helped
+me with uspsv1.c in office hours. Thanks for the help Nick!
+*/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -10,7 +17,7 @@
 #define USESTR "usage: [WORKLOAD_FILE] ... \n"
 #define UNUSED __attribute__((unused))
 
-// GLOBAL VARIABLES
+// GLOBAL VARIABLES.
 int signalled = 0;
 
 void signal_handler(int sig){

@@ -1,3 +1,10 @@
+/*
+Name: Alder French, DuckID: afrench7, Assignment: CIS 415 Project 1
+
+This is my own work, except for some help from Nick the TA, he helped
+me with uspsv1.c in office hours. Thanks for the help Nick!
+*/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -10,7 +17,7 @@
 
 // use standard functions like fprint() to start off with,
 // then come back and replace them with system calls like write()
-// after uspsv1 is working
+// after uspsv1 is working.
 
 int main( UNUSED int argc, char *argv[]){
 	// start by getting processing argv to find workload file
